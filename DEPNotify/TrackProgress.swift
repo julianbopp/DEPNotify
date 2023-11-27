@@ -33,6 +33,8 @@ class TrackProgress: NSObject {
     let task = Process()
     let fm = FileManager()
     var additionalPath = OtherLogs.none
+    var additionalPath2 = OtherLogs.none
+    var munkijamf = false
     var fwDownloadsStarted = false
     var filesets = Set<String>()
     
@@ -57,6 +59,10 @@ class TrackProgress: NSObject {
                 statusText = "Downloading Filewave configuration"
             case "-airwatch" :
                 additionalPath = OtherLogs.airwatch
+            case "-jamfmunki" :
+                additionalPath = OtherLogs.jamf
+                additionalPath2 = OtherLogs.munki
+                munkijamf = true
             default :
                 break
             }
@@ -66,7 +72,12 @@ class TrackProgress: NSObject {
         command = ""
         status = .start
         task.launchPath = "/usr/bin/tail"
-        task.arguments = ["-f", path, additionalPath]
+        
+        if munkijamf {
+            task.arguments = ["-f", path, additionalPath, additionalPath2]
+        } else {
+            task.arguments = ["-f", path, additionalPath]
+        }
         
     }
     
@@ -126,6 +137,22 @@ class TrackProgress: NSObject {
             case "Command:" :
                 command = line.replacingOccurrences(of: "Command: ", with: "")
             default:
+                if munkijamf {
+                    if (line.contains("Installing") || line.contains("Downloading"))
+                        && !line.contains(" at ") && !line.contains(" from ") {
+                        
+                        do {
+                            let installerRegEx = try NSRegularExpression(pattern: "^.{0,27}")
+                            let status = installerRegEx.stringByReplacingMatches(in: line,
+                                                                                 options: NSRegularExpression.MatchingOptions.anchored,
+                                                                                 range: NSMakeRange(0, line.count),
+                                                                                 withTemplate: "").trimmingCharacters(in: .whitespacesAndNewlines)
+                            statusText = status
+                        } catch {
+                            NSLog("Couldn't parse ManagedSoftwareUpdate.log")
+                        }
+                    }
+                }
                 switch additionalPath {
                 case OtherLogs.jamf :
                     // Define Variables
